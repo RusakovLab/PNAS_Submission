@@ -1,420 +1,326 @@
-%% HOPFIELD NETWORK WITH BELL-SHAPED THRESHOLDS - CAPACITY ANALYSIS
-% Integrates the bell-shaped threshold mechanism from Fig3Chat.m
-% into capacity analysis framework for image recognition testing
-%
-% Key Parameters:
-%   gamma    - Controls global energy scaling (< 0.5, negative = deeper wells)
-%   bell_amp - Amplitude of bell-shaped heterogeneity (energy-neutral)
+%% FIGURE 2: Classical Hopfield Network with Dynamic Thresholds
+% Generates three-panel figure:
+% Panel A: Recall quality vs noise for different γ values (fixed β)
+% Panel B: Recall quality vs loading factor for different γ values (at different noise levels)
+% Panel C: ΔQ heatmaps showing improvement over baseline
 
 clear; clc; close all;
 
-%% ========== USER PARAMETERS: BELL-SHAPED THRESHOLD MECHANISM ==========
-gamma_values    = [-1.2, -1.0, -0.5, 0.0];   % Test multiple gamma values
-bell_amp_values = [0, 1.1, 2.1, 3.1, 4.1];        % Test multiple bell amplitudes
-% ========================================================================
+%% ========== PARAMETERS ==========
+% Threshold parameters to test
+gamma_values    = [-1.20, -1.00, -0.50, 0.00];   % Global energy scaling
+bell_amp_values = [0.00, 10.0, 20.0];            % Heterogeneity amplitude
 
-%% EXPERIMENT CONTROL PARAMETERS
-noise_levels = (0:0.1:1);
-num_trials   = 100;     % Number of trials for statistical analysis
-ShowPlot_    = false;  % Set to true to see individual heattrials
+% Network parameters
+network_size   = 144;            % 12x12 network
+pattern_counts = [2, 4, 8, 12, 16, 20, 24, 28, 32];  % Different network loads
+noise_levels   = 0:0.1:1.0;      % Noise levels to test
+num_trials     = 10;            % Trials per condition
 
-% CAPACITY TEST: Keep N fixed, vary n_patterns
-network_size   = 144;            % 12x12 network for testing
-pattern_counts = [2, 4, 8, 12, 16, 20, 24, 28, 32];
-M        = 143;                  % Reduced connectivity for stability
-SigmaM   = 3;                    % Smaller sigma for more local connectivity
+% Network topology
+M        = 143;                  % Connectivity
+SigmaM   = 3;                    % Spatial connection decay
 weight_scale = 1.0;
 
-%% SIMULATION PARAMETERS
+% Dynamics parameters
 max_iterations        = 1000;
 convergence_threshold = 0.001;
-temperature           = 0.1;     % Temperature for stochastic updates
-update_type           = 'async';  % 'sync' or 'async' updates
+temperature           = 0.1;
+update_type           = 'async';
 
 %% Initialize results storage
-% Results structure: [noise_levels, pattern_counts, gamma_idx, bell_idx, trials]
-all_results  = zeros(length(noise_levels), length(pattern_counts), ...
-                     length(gamma_values), length(bell_amp_values), num_trials);
+fprintf('=== FIGURE 2: CLASSICAL HOPFIELD CAPACITY ANALYSIS ===\n');
+fprintf('Network size: %d neurons\n', network_size);
+fprintf('Pattern counts: %s\n', mat2str(pattern_counts));
+fprintf('Noise levels: 0.0 to 1.0 (step 0.1)\n');
+fprintf('Trials per condition: %d\n', num_trials);
+
 mean_results = zeros(length(noise_levels), length(pattern_counts), ...
                      length(gamma_values), length(bell_amp_values));
 std_results  = zeros(length(noise_levels), length(pattern_counts), ...
                      length(gamma_values), length(bell_amp_values));
 
-%% Run capacity analysis with bell-shaped thresholds
-fprintf('=== BELL-SHAPED THRESHOLD CAPACITY ANALYSIS ===\n');
-fprintf('Network size: %d neurons\n', network_size);
-fprintf('Number of trials: %d\n', num_trials);
-fprintf('Testing gamma values: %s\n', mat2str(gamma_values));
-fprintf('Testing bell_amp values: %s\n', mat2str(bell_amp_values));
-fprintf('Testing pattern counts: %s\n', mat2str(pattern_counts));
-fprintf('Testing noise levels: %s\n', mat2str(noise_levels));
-
-% Progress tracking
-total_experiments = length(noise_levels) * length(pattern_counts) * ...
-                    length(gamma_values) * length(bell_amp_values) * num_trials;
-experiment_count = 0;
+%% Run simulations
 start_time = tic;
+total_conditions = length(noise_levels) * length(pattern_counts) * ...
+                   length(gamma_values) * length(bell_amp_values);
+condition_count = 0;
 
 for noise_idx = 1:length(noise_levels)
     noise_level = noise_levels(noise_idx);
-    fprintf('\n=== NOISE LEVEL: %.1f ===\n', noise_level);
     
     for p_idx = 1:length(pattern_counts)
-        n_patterns    = pattern_counts(p_idx);
-        loading_factor = n_patterns / network_size;
-        
-        fprintf('\n--- Testing %d patterns (α = %.3f) ---\n', n_patterns, loading_factor);
+        n_patterns = pattern_counts(p_idx);
         
         for gamma_idx = 1:length(gamma_values)
             gamma = gamma_values(gamma_idx);
             
             for bell_idx = 1:length(bell_amp_values)
                 bell_amp = bell_amp_values(bell_idx);
-                fprintf('  γ=%.2f, bell_amp=%.1f: ', gamma, bell_amp);
                 
-                % Run multiple trials
+                % Run trials
                 trial_results = zeros(num_trials, 1);
                 for trial = 1:num_trials
                     trial_seed = trial * 1000 + noise_idx * 100 + p_idx * 10 + ...
                                  gamma_idx * 5 + bell_idx;
                     
                     quality = hopfield_bell_threshold(network_size, noise_level, ...
-                        ShowPlot_ && trial == 1 && p_idx <= 3, M, SigmaM, ...
-                        n_patterns, max_iterations, convergence_threshold, weight_scale, ...
-                        temperature, update_type, gamma, bell_amp, trial_seed);
+                        false, M, SigmaM, n_patterns, max_iterations, ...
+                        convergence_threshold, weight_scale, temperature, ...
+                        update_type, gamma, bell_amp, trial_seed);
                     
                     trial_results(trial) = quality;
-                    experiment_count = experiment_count + 1;
-                    
-                    % Progress indicator
-                    if mod(trial, max(1, floor(num_trials/5))) == 0
-                        fprintf('.');
-                    end
                 end
                 
-                % Store results
-                all_results(noise_idx, p_idx, gamma_idx, bell_idx, :) = trial_results;
+                % Store statistics
                 mean_results(noise_idx, p_idx, gamma_idx, bell_idx) = mean(trial_results);
-                std_results(noise_idx, p_idx, gamma_idx, bell_idx)  = std(trial_results);
+                std_results(noise_idx, p_idx, gamma_idx, bell_idx) = std(trial_results);
                 
-                fprintf(' Mean=%.3f±%.3f\n', ...
-                    mean_results(noise_idx, p_idx, gamma_idx, bell_idx), ...
-                    std_results(noise_idx, p_idx, gamma_idx, bell_idx));
+                condition_count = condition_count + 1;
+                if mod(condition_count, 50) == 0
+                    elapsed = toc(start_time);
+                    progress = 100 * condition_count / total_conditions;
+                    fprintf('Progress: %.1f%% (%d/%d conditions), Elapsed: %.1f min\n', ...
+                        progress, condition_count, total_conditions, elapsed/60);
+                end
             end
         end
     end
-    
-    elapsed   = toc(start_time);
-    remaining = (total_experiments - experiment_count) * elapsed / max(experiment_count,1);
-    fprintf('Progress: %d/%d (%.1f%%), Est. remaining: %.1f min\n', ...
-        experiment_count, total_experiments, 100*experiment_count/total_experiments, ...
-        remaining/60);
 end
 
-fprintf('\nCompleted %d experiments in %.1f minutes\n', experiment_count, toc(start_time)/60);
+fprintf('Completed in %.1f minutes\n', toc(start_time)/60);
 
-%% Save results to file
-timestamp = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-filename  = sprintf('bell_hopfield_capacity_%s.mat', timestamp);
-
-save(filename, 'mean_results', 'std_results', 'all_results', ...
-     'noise_levels', 'pattern_counts', 'gamma_values', 'bell_amp_values', ...
-     'num_trials', 'network_size');
-
-fprintf('\nResults saved to: %s\n', filename);
-
-%% Create comprehensive comparison plots
+%% ========== GENERATE FIGURE 2 ==========
 loading_factors = pattern_counts / network_size;
 
-% Plot 1: Effect of gamma for fixed bell_amp
-figure('Position', [100, 100, 1400, 900]);
-bell_idx_to_plot = 1;  % Plot bell_amp index 3 (adjust as needed)
-bell_amp_plot = bell_amp_values(bell_idx_to_plot);
+% Find baseline (γ=0, β=0) for computing ΔQ
+baseline_gamma_idx = find(gamma_values == 0);
+baseline_bell_idx  = find(bell_amp_values == 0);
 
-for noise_idx = 1:min(6, length(noise_levels))
-    subplot(2, 3, noise_idx);
-    hold on; grid on;
+fig = figure('Position', [50, 50, 1800, 1400], 'Color', 'w');
+
+%% PANEL A: Recall Quality vs Noise (specific γ,β combinations)
+% Show three specific (γ, β) combinations across columns
+% Based on example: (γ=0.0, β=0.0), (γ=-0.5, β=10.0), (γ=-1.0, β=20.0)
+panel_A_configs = [
+    4, 1;  % γ = 0.00, β = 0.0  (indices)
+    3, 2;  % γ = -0.50, β = 10.0
+    2, 3   % γ = -1.00, β = 20.0
+];
+
+for col = 1:3
+    gamma_idx = panel_A_configs(col, 1);
+    bell_idx  = panel_A_configs(col, 2);
+    gamma_val = gamma_values(gamma_idx);
+    bell_val  = bell_amp_values(bell_idx);
     
+    subplot(3, 3, col);
+    hold on; grid on; box on;
+    
+    % Plot all pattern counts with different colors
+    colors = lines(length(pattern_counts));
+    for p_idx = 1:length(pattern_counts)
+        y_mean = mean_results(:, p_idx, gamma_idx, bell_idx);
+        y_std  = std_results(:, p_idx, gamma_idx, bell_idx);
+        
+        errorbar(noise_levels, y_mean, y_std, '-o', ...
+                 'LineWidth', 2, 'MarkerSize', 6, ...
+                 'Color', colors(p_idx,:), ...
+                 'DisplayName', sprintf('n = %d patterns', pattern_counts(p_idx)));
+    end
+    
+    xlabel('Noise Level');
+    ylabel('Recall Quality');
+    title(sprintf('Recall Quality vs Noise (\\gamma = %.2f, \\beta = %.1f)', ...
+                  gamma_val, bell_val));
+    legend('Location', 'best', 'FontSize', 7);
+    ylim([0, 1.05]);
+    xlim([0, 1]);
+    
+    % Add reference line at 0.5
+    plot([0, 1], [0.5, 0.5], 'k--', 'LineWidth', 1, 'HandleVisibility', 'off');
+end
+
+%% PANEL B: Recall Quality vs Loading Factor (at different noise levels)
+% Show three different noise levels across columns
+panel_B_noise_indices = [1, 3, 5];  % noise = 0.00, 0.20, 0.40
+panel_B_bell_idx      = 1;          % Fixed β = 0.0
+
+for col = 1:3
+    noise_idx = panel_B_noise_indices(col);
+    noise_val = noise_levels(noise_idx);
+    
+    subplot(3, 3, 3 + col);
+    hold on; grid on; box on;
+    
+    % Plot each γ value
     colors = lines(length(gamma_values));
     for gamma_idx = 1:length(gamma_values)
-        errorbar(loading_factors, ...
-                mean_results(noise_idx, :, gamma_idx, bell_idx_to_plot), ...
-                std_results(noise_idx,  :, gamma_idx, bell_idx_to_plot), ...
-                '-o', 'LineWidth', 2, 'Color', colors(gamma_idx,:), ...
-                'DisplayName', sprintf('\\gamma = %.2f', gamma_values(gamma_idx)));
-    end
-    
-    xlabel('Loading Factor \alpha = n_{patterns}/N');
-    ylabel('Recall Quality');
-    title(sprintf('Noise = %.1f, bell\\_amp = %.1f', noise_levels(noise_idx), bell_amp_plot));
-    legend('Location', 'best');
-    ylim([0, 1.05]);
-end
-
-sgtitle('Effect of \gamma on Network Capacity (Fixed bell\_amp)');
-saveas(gcf, sprintf('gamma_effect_%s.png', timestamp));
-
-% Plot 2: Effect of bell_amp for fixed gamma
-figure('Position', [150, 150, 1400, 900]);
-gamma_idx_to_plot = 4;  % Plot gamma index 2 (adjust as needed)
-gamma_plot = gamma_values(gamma_idx_to_plot);
-
-for noise_idx = 1:min(6, length(noise_levels))
-    subplot(2, 3, noise_idx);
-    hold on; grid on;
-    
-    colors = lines(length(bell_amp_values));
-    for bell_idx = 1:length(bell_amp_values)
-        errorbar(loading_factors, ...
-                mean_results(noise_idx, :, gamma_idx_to_plot, bell_idx), ...
-                std_results(noise_idx,  :, gamma_idx_to_plot, bell_idx), ...
-                '-o', 'LineWidth', 2, 'Color', colors(bell_idx,:), ...
-                'DisplayName', sprintf('bell\\_amp = %.1f', bell_amp_values(bell_idx)));
-    end
-    
-    xlabel('Loading Factor \alpha = n_{patterns}/N');
-    ylabel('Recall Quality');
-    title(sprintf('Noise = %.1f, \\gamma = %.2f', noise_levels(noise_idx), gamma_plot));
-    legend('Location', 'best');
-    ylim([0, 1.05]);
-end
-
-sgtitle('Effect of bell\_amp on Network Capacity (Fixed \gamma)');
-saveas(gcf, sprintf('bell_amp_effect_%s.png', timestamp));
-
-% Plot 3: Heatmap of best configurations
-figure('Position', [200, 200, 1200, 400]);
-
-% noise 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
-%       1,  2,   3,   4,   5,   6,   7,   8,   9,  10,   11  
-%pattern_counts = [2, 4, 8, 12, 16, 20, 24, 28, 32];
-% 0.0138	0.0277	0.0555	0.08333	0.1805	0.1388	0.166	0.194	0.222
-
-
-
-noise_idx_heatmap = 1;  % Noise level to show (index 5 = 0.4)
-p_idx_heatmap     = 4;  % Pattern count to show
-
-heatmap_data = squeeze(mean_results(noise_idx_heatmap, p_idx_heatmap, :, :));
-
-imagesc(heatmap_data);
-colorbar;
-colormap(jet);
-caxis([0, 1]);
-
-xlabel('bell\_amp index');
-ylabel('\gamma index');
-title(sprintf('Recall Quality Heatmap: Noise=%.1f, Patterns=%d', ...
-    noise_levels(noise_idx_heatmap), pattern_counts(p_idx_heatmap)));
-
-xticks(1:length(bell_amp_values));
-xticklabels(arrayfun(@num2str, bell_amp_values, 'UniformOutput', false));
-yticks(1:length(gamma_values));
-yticklabels(arrayfun(@num2str, gamma_values, 'UniformOutput', false));
-
-% Add text annotations
-for i = 1:length(gamma_values)
-    for j = 1:length(bell_amp_values)
-        text(j, i, sprintf('%.2f', heatmap_data(i,j)), ...
-            'HorizontalAlignment', 'center', 'Color', 'white', 'FontWeight', 'bold');
-    end
-end
-
-saveas(gcf, sprintf('parameter_heatmap_%s.png', timestamp));
-
-%% ===== NEW: Recall quality vs. noise (γ / bell_amp sweeps) =====
-% Choose a representative loading factor (pattern count) to slice on:
-p_idx_noiseplot = 5;  % e.g., pattern_counts(5) => alpha ≈ 0.111
-alpha_plot = pattern_counts(p_idx_noiseplot) / network_size;
-
-% Figure A: vary gamma at fixed bell_amp
-figure('Position', [220, 220, 1400, 900]);
-bell_idx_to_plot = 1;                      % pick a bell_amp index to show
-bell_amp_plot = bell_amp_values(bell_idx_to_plot);
-
-hold on;
-colors = lines(length(gamma_values));
-for gamma_idx = 1:length(gamma_values)
-    mu = squeeze(mean_results(:, p_idx_noiseplot, gamma_idx, bell_idx_to_plot));   % [noise]
-    sd = squeeze(std_results(:,  p_idx_noiseplot, gamma_idx, bell_idx_to_plot));
-    errorbar(noise_levels, mu, sd, '-o', 'LineWidth', 2, ...
-             'Color', colors(gamma_idx,:), ...
-             'DisplayName', sprintf('\\gamma = %.2f', gamma_values(gamma_idx)));
-end
-grid on; box on;
-xlabel('Noise level'); ylabel('Recall Quality');
-title(sprintf('Quality vs Noise (fixed bell\\_amp = %.1f, \\alpha = %.3f)', bell_amp_plot, alpha_plot));
-legend('Location','southwest');
-ylim([0, 1.05]);
-saveas(gcf, sprintf('quality_vs_noise_fixed_bellamp_%s.png', timestamp));
-
-% Figure B: vary bell_amp at fixed gamma
-figure('Position', [240, 240, 1400, 900]);
-gamma_idx_to_plot = 4;                      % pick a gamma index to show
-gamma_plot = gamma_values(gamma_idx_to_plot);
-
-hold on;
-colors = lines(length(bell_amp_values));
-for bell_idx = 1:length(bell_amp_values)
-    mu = squeeze(mean_results(:, p_idx_noiseplot, gamma_idx_to_plot, bell_idx));   % [noise]
-    sd = squeeze(std_results(:,  p_idx_noiseplot, gamma_idx_to_plot, bell_idx));
-    errorbar(noise_levels, mu, sd, '-o', 'LineWidth', 2, ...
-             'Color', colors(bell_idx,:), ...
-             'DisplayName', sprintf('bell\\_amp = %.1f', bell_amp_values(bell_idx)));
-end
-grid on; box on;
-xlabel('Noise level'); ylabel('Recall Quality');
-title(sprintf('Quality vs Noise (fixed \\gamma = %.2f, \\alpha = %.3f)', gamma_plot, alpha_plot));
-legend('Location','southwest');
-ylim([0, 1.05]);
-saveas(gcf, sprintf('quality_vs_noise_fixed_gamma_%s.png', timestamp));
-
-%% Generate summary report
-txt_filename = sprintf('bell_hopfield_summary_%s.txt', timestamp);
-fid = fopen(txt_filename, 'w');
-
-fprintf(fid, 'BELL-SHAPED HOPFIELD NETWORK CAPACITY ANALYSIS\n');
-fprintf(fid, '==============================================\n\n');
-fprintf(fid, 'Experiment Parameters:\n');
-fprintf(fid, '- Network size: %d neurons\n', network_size);
-fprintf(fid, '- Number of trials: %d\n', num_trials);
-fprintf(fid, '- Gamma values: %s\n', mat2str(gamma_values));
-fprintf(fid, '- Bell_amp values: %s\n', mat2str(bell_amp_values));
-fprintf(fid, '- Pattern counts: %s\n', mat2str(pattern_counts));
-fprintf(fid, '- Timestamp: %s\n\n', timestamp);
-
-% Find best configurations
-fprintf(fid, '\nBEST CONFIGURATIONS:\n');
-fprintf(fid, '====================\n\n');
-
-for noise_idx = [1, 5, 9]  % Show results for noise 0.0, 0.4, 0.8
-    fprintf(fid, 'Noise Level: %.1f\n', noise_levels(noise_idx));
-    for p_idx = [3, 5, 7]  % Show results for different pattern counts
-        n_patterns = pattern_counts(p_idx);
+        y_mean = squeeze(mean_results(noise_idx, :, gamma_idx, panel_B_bell_idx));
+        y_std  = squeeze(std_results(noise_idx, :, gamma_idx, panel_B_bell_idx));
         
-        % Find best gamma and bell_amp combination
-        results_slice = squeeze(mean_results(noise_idx, p_idx, :, :));
-        [max_quality, max_idx] = max(results_slice(:));
-        [best_gamma_idx, best_bell_idx] = ind2sub(size(results_slice), max_idx);
-        
-        fprintf(fid, '  Patterns=%d (α=%.3f): Quality=%.3f at γ=%.2f, bell_amp=%.1f\n', ...
-            n_patterns, n_patterns/network_size, max_quality, ...
-            gamma_values(best_gamma_idx), bell_amp_values(best_bell_idx));
+        errorbar(loading_factors, y_mean, y_std, '-o', ...
+                 'LineWidth', 2, 'MarkerSize', 6, ...
+                 'Color', colors(gamma_idx,:), ...
+                 'DisplayName', sprintf('\\gamma = %.2f', gamma_values(gamma_idx)));
     end
-    fprintf(fid, '\n');
+    
+    xlabel('Loading Factor \alpha = n/N');
+    ylabel('Recall Quality');
+    title(sprintf('Noise = %.2f', noise_val));
+    legend('Location', 'best', 'FontSize', 8);
+    ylim([0, 1.05]);
+    
+    % Add reference line at 0.5
+    plot([min(loading_factors), max(loading_factors)], [0.5, 0.5], ...
+         'k--', 'LineWidth', 1, 'HandleVisibility', 'off');
 end
 
-fclose(fid);
-fprintf('Summary saved to: %s\n', txt_filename);
+%% PANEL C: ΔQ Heatmaps (improvement over baseline)
+% Show three different parameter combinations
+% ΔQ_any = Q_best(γ,β) - Q_baseline(γ=0,β=0)
+% ΔQ_γ = Q_best(γ,β=0) - Q_baseline  
+% ΔQ_β = Q_best(γ,β≠0) - Q_baseline
 
-%% MAIN HOPFIELD FUNCTION WITH BELL-SHAPED THRESHOLDS
+% For each heatmap, find best γ or β and compute improvement
+panel_C_configs = {
+    'any',  'Q_{best}(\\gamma,\\beta) - Q_{baseline}';
+    'gamma', 'Q_{best}(\\gamma,\\beta=0) - Q_{baseline}';
+    'beta',  'Q_{best}(\\gamma,\\beta\\neq0) - Q_{baseline}'
+};
+
+for col = 1:3
+    config_type = panel_C_configs{col, 1};
+    config_label = panel_C_configs{col, 2};
+    
+    % Compute ΔQ for this configuration
+    DeltaQ = zeros(length(noise_levels), length(pattern_counts));
+    
+    for noise_idx = 1:length(noise_levels)
+        for p_idx = 1:length(pattern_counts)
+            % Baseline quality
+            Q_baseline = mean_results(noise_idx, p_idx, baseline_gamma_idx, baseline_bell_idx);
+            
+            % Best quality based on configuration
+            switch config_type
+                case 'any'
+                    % Best over all γ and β
+                    Q_best = max(max(mean_results(noise_idx, p_idx, :, :)));
+                case 'gamma'
+                    % Best over γ with β=0
+                    Q_best = max(mean_results(noise_idx, p_idx, :, baseline_bell_idx));
+                case 'beta'
+                    % Best over β≠0 with any γ
+                    non_zero_bell = setdiff(1:length(bell_amp_values), baseline_bell_idx);
+                    Q_best = max(max(mean_results(noise_idx, p_idx, :, non_zero_bell)));
+            end
+            
+            DeltaQ(noise_idx, p_idx) = Q_best - Q_baseline;
+        end
+    end
+    
+    subplot(3, 3, 6 + col);
+    imagesc(loading_factors, noise_levels, DeltaQ);
+    set(gca, 'YDir', 'normal');
+    colorbar;
+    colormap(jet);
+    caxis([0, max(DeltaQ(:)) + 0.05]);
+    
+    xlabel('Load \alpha');
+    ylabel('Noise \sigma');
+    title(sprintf('\\DeltaQ = %s', config_label), 'Interpreter', 'tex');
+end
+
+% Add overall title
+sgtitle('Figure 2: Classical Hopfield Network with Dynamic Thresholds', ...
+        'FontSize', 14, 'FontWeight', 'bold');
+
+%% Save figure
+saveas(fig, '../../figures_out/main/fig02_classical_hopfield_network.png');
+saveas(fig, '../../figures_out/main/fig02_classical_hopfield_network.fig');
+fprintf('Figure saved to figures_out/main/\n');
+
+%% Figures saved successfully
+fprintf('\n=== Figure 2 Generation Complete ===\n');
+fprintf('Figures saved to: figures_out/main/\n');
+
+%% ========== HELPER FUNCTIONS (must be at end) ==========
+
 function quality = hopfield_bell_threshold(N, noise_level, show_plots, M, SigmaM, ...
                                           n_patterns, max_iterations, convergence_threshold, ...
                                           weight_scale, temperature, update_type, ...
                                           gamma, bell_amp, trial_seed)
+    % Main function that creates network and tests retrieval
     
-    grid_size = sqrt(N);
-    if floor(grid_size) ~= grid_size
-        grid_size = round(sqrt(N));
-        N = grid_size^2;
-    end
-    img_size = [grid_size, grid_size];
-
+    img_size = [round(sqrt(N)), round(sqrt(N))];
+    
     % Create patterns
     patterns = create_patterns_fixed(N, n_patterns, img_size, trial_seed);
-
+    
     % Create weight matrix
     W = create_weight_matrix_fixed(patterns, N, weight_scale, M, SigmaM, img_size);
-
-    % Calculate bell-shaped thresholds using mechanism from Fig2Chat.m
-    [thresholds_func, G_opt, stdG] = create_bell_threshold_function(W, patterns, gamma, bell_amp, N); %#ok<ASGLU>
-
-    % Test retrieval with bell-shaped thresholds
-    quality = test_retrieval_bell(N, patterns, W, thresholds_func, img_size, ...
-                                 noise_level, show_plots, max_iterations, ...
-                                 convergence_threshold, temperature, update_type, trial_seed);
+    
+    % Create threshold function with bell-shaped mechanism
+    threshold_func = create_threshold_function_bell(patterns, W, N, gamma, bell_amp);
+    
+    % Test retrieval
+    quality = test_retrieval_bell(N, patterns, W, threshold_func, img_size, ...
+                                  noise_level, show_plots, max_iterations, ...
+                                  convergence_threshold, temperature, update_type, trial_seed);
 end
 
-%% BELL-SHAPED THRESHOLD MECHANISM (from Fig2Chat.m)
-function [threshold_func, G_opt, stdG] = create_bell_threshold_function(W, patterns, gamma, bell_amp, N)
-    % Creates a function handle that returns bell-shaped thresholds for any state
-    % This implements the minima-preserving threshold mechanism from Fig2Chat.m
+function threshold_func = create_threshold_function_bell(patterns, W, N, gamma, bell_amp)
+    % Creates state-dependent threshold function with bell-shaped heterogeneity
     
-    % Calculate statistics for bell-shape from all patterns
     G_pat = W * patterns;
-    G_opt = mean(G_pat(:));  % Center bell-shape around average pattern conductance
-    
-    % Calculate standard deviation across all possible inputs (approximated by patterns)
+    G_opt = mean(G_pat(:));
     stdG = std(G_pat(:));
     
-    % Return function handle that computes thresholds for any state s
     threshold_func = @(s) local_thresholds_bell(s, W, G_opt, stdG, gamma, bell_amp, N);
 end
 
 function th = local_thresholds_bell(s, W, G_opt, stdG, gamma, bell_amp, N)
-    % Returns bell-shaped thresholds that preserve minima
-    % Implementation from Fig2Chat.m: local_thresholds_minima_preserving
+    % Compute bell-shaped thresholds for current state s
     
-    S = s.' * W * s;  % State energy contribution
+    S = s.' * W * s;  % Energy
     
     if stdG <= 0
         th = zeros(N, 1);
         return;
     end
     
-    G = W * s;  % Synaptic input for each neuron
+    G = W * s;
     B = 1 / (2 * stdG^2);
     
-    % Bell-shaped profile centered at G_opt
+    % Bell-shaped profile
     phi = exp(-B * (G - G_opt).^2);
-    
-    % Make zero-mean across neurons
     d = phi - mean(phi);
-    
-    % Make orthogonal to s (energy-neutral constraint)
-    d = d - (d.' * s) / N * s;
-    
-    % Apply user amplitude knob
+    d = d - (d.' * s) / N * s;  % Orthogonal to state
     d = bell_amp * d;
     
-    % Parallel component (controls global energy rescale)
+    % Parallel component (energy scaling)
     theta_par = (gamma * S / N) * s;
     
-    % Final threshold: parallel (energy-scaling) + orthogonal (heterogeneity)
     th = theta_par + d;
 end
 
-%% PATTERN AND NETWORK CREATION FUNCTIONS
 function patterns = create_patterns_fixed(N, n_patterns, img_size, trial_seed)
+    % Create random binary patterns
+    
     patterns = zeros(N, n_patterns);
     
     for p = 1:n_patterns
         rng(trial_seed + p*1000 + 42);
-        
-        % Create random binary patterns with 30% activity, convert to ±1
         img = rand(img_size) < 0.3;
         binary_pattern = reshape(img, [], 1);
         patterns(:, p) = 2*binary_pattern - 1;
     end
-    
-    if n_patterns > 1
-        % Check pattern correlations
-        correlations = zeros(n_patterns, n_patterns);
-        for i = 1:n_patterns
-            for j = 1:n_patterns
-                correlations(i,j) = corr(patterns(:,i), patterns(:,j));
-            end
-        end
-        avg_correlation = mean(abs(correlations(~eye(n_patterns))));
-        if avg_correlation > 0.3
-            fprintf('Warning: High pattern correlation: %.3f\n', avg_correlation);
-        end
-    end
 end
 
 function W = create_weight_matrix_fixed(patterns, N, weight_scale, M, SigmaM, img_size)
-    % Create classical Hopfield weight matrix with spatial connectivity
-    [X, Y] = meshgrid(1:img_size(2), 1:img_size(1)); %#ok<NASGU>
+    % Create Hopfield weight matrix with spatial connectivity
+    
+    [X, Y] = meshgrid(1:img_size(2), 1:img_size(1));
     positions = [reshape(Y, [], 1), reshape(X, [], 1)];
     
     D = pdist2(positions, positions);
@@ -441,68 +347,53 @@ function W = create_weight_matrix_fixed(patterns, N, weight_scale, M, SigmaM, im
     end
     
     W = W * weight_scale;
-    W = (W + W') / 2;  % Symmetry
-    W = W - diag(diag(W));  % No self-connections
+    W = (W + W') / 2;
+    W = W - diag(diag(W));
 end
 
-%% RETRIEVAL TESTING WITH BELL-SHAPED THRESHOLDS
 function quality = test_retrieval_bell(N, patterns, W, threshold_func, img_size, ...
                                       noise_level, show_plots, max_iterations, ...
                                       convergence_threshold, temperature, update_type, trial_seed)
+    % Test pattern retrieval with bell-shaped thresholds
     
     rng(trial_seed + 999);
     
-    % Test pattern 1
     test_pattern_idx = 1;
     original_pattern = patterns(:, test_pattern_idx);
     
-    % Create noisy version
+    % Add noise
     noisy_pattern = original_pattern;
     flip_indices = rand(N, 1) < noise_level;
     noisy_pattern(flip_indices) = -noisy_pattern(flip_indices);
     
-    % Initialize network state
     state = noisy_pattern;
     prev_state = state;
     
-    % Run Hopfield dynamics with bell-shaped thresholds
     converged = false;
     iteration = 0;
     
     while ~converged && iteration < max_iterations
         iteration = iteration + 1;
-        
-        % Get thresholds for CURRENT state (key difference: state-dependent)
         thresholds = threshold_func(state);
         
         if strcmp(update_type, 'async')
-            % Asynchronous updates
             update_order = randperm(N);
             for idx = 1:N
                 i = update_order(idx);
-                
-                % Calculate net input with bell-shaped threshold
                 net_input = W(i, :) * state - thresholds(i);
                 
                 if temperature > 0
                     prob = 1 / (1 + exp(-2 * net_input / temperature));
-                    if rand < prob
-                        state(i) = 1;
-                    else
-                        state(i) = -1;
-                    end
+                    state(i) = 2 * (rand < prob) - 1;
                 else
-                    if net_input > 0
-                        state(i) = 1;
-                    elseif net_input < 0
-                        state(i) = -1;
+                    state(i) = sign(net_input);
+                    if net_input == 0
+                        state(i) = prev_state(i);
                     end
                 end
             end
         else
-            % Synchronous updates
             net_inputs = W * state - thresholds;
-            
             if temperature > 0
                 probs = 1 ./ (1 + exp(-2 * net_inputs / temperature));
                 state = 2 * (rand(N, 1) < probs) - 1;
@@ -512,42 +403,16 @@ function quality = test_retrieval_bell(N, patterns, W, threshold_func, img_size,
             end
         end
         
-        % Check convergence
         if norm(state - prev_state) < convergence_threshold
             converged = true;
         end
-        
         prev_state = state;
     end
     
-    if show_plots
-        fprintf('  Converged after %d iterations\n', iteration);
-    end
-    
-    % Calculate retrieval quality
+    % Calculate quality
     overlap = (state' * original_pattern) / N;
-    quality = (overlap + 1) / 2;  % Normalize to [0,1]
+    quality = (overlap + 1) / 2;
     
     correlation_quality = (corr(state, original_pattern) + 1) / 2;
     quality = max(quality, correlation_quality);
-    
-    if show_plots
-        fprintf('  Overlap: %.3f, Correlation: %.3f, Quality: %.3f\n', ...
-                overlap, corr(state, original_pattern), quality);
-        
-        figure;
-        subplot(1,3,1);
-        imshow(reshape((original_pattern + 1)/2, img_size), []);
-        title('Original Pattern');
-        
-        subplot(1,3,2);
-        imshow(reshape((noisy_pattern + 1)/2, img_size), []);
-        title(sprintf('Noisy Input (%.0f%%)', noise_level*100));
-        
-        subplot(1,3,3);
-        imshow(reshape((state + 1)/2, img_size), []);
-        title(sprintf('Retrieved (Q=%.2f)', quality));
-        
-        pause(1);
-    end
 end

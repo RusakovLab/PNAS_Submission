@@ -186,11 +186,13 @@ lgC.Box = 'off';
 % Optional figure header (often omitted in PNAS main figures)
 % sgtitle(sprintf('\\gamma=%.2f, bell\\_amp=%.1f', gamma, bell_amp), 'FontSize', 12, 'FontWeight','bold');
 
-% Export
-outBase = 'Fig1_PNAS_clean';
-print(fig, [outBase '.pdf'], '-dpdf', '-painters');
-print(fig, [outBase '.png'], '-dpng', '-r600');
-fprintf('Saved: %s.pdf and %s.png\n', outBase, outBase);
+% Export to figures_out/main/
+saveas(fig, '../../figures_out/main/fig01_overview.png');
+saveas(fig, '../../figures_out/main/fig01_overview.fig');
+print(fig, '../../figures_out/main/fig01_overview.pdf', '-dpdf', '-painters');
+
+fprintf('\n=== Figure 1 Generation Complete ===\n');
+fprintf('Figures saved to: figures_out/main/\n');
 
 %% ----------------- helper -----------------
 function th = local_thresholds_minima_preserving(s, W, G_opt, stdG, gamma, bell_amp)

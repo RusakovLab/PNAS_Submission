@@ -226,9 +226,10 @@ legend([h95, h50, hmed, hfit, h1, h2, h3, h4, h5], 'Location','NorthEast', 'Font
 
 hold off;
 
-%% 9) Export
-outBase = 'FigS1_literature_invertedU_blockBootstrap';
-print(fig, [outBase '.pdf'], '-dpdf', '-painters');
-print(fig, [outBase '.png'], '-dpng', '-r600');
+%% Export to supplementary folder
+saveas(fig, '../../figures_out/supplementary/figS01_literature_invertedU.png');
+saveas(fig, '../../figures_out/supplementary/figS01_literature_invertedU.fig');
+print(fig, '../../figures_out/supplementary/figS01_literature_invertedU.pdf', '-dpdf', '-painters');
 
-fprintf('Saved: %s.pdf and %s.png\n', outBase, outBase);
+fprintf('\n=== Supplementary Figure 1 Generation Complete ===\n');
+fprintf('Figures saved to: figures_out/supplementary/\n');
