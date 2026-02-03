@@ -177,16 +177,16 @@ for col = 1:3
 end
 
 %% PANEL C: ΔQ Heatmaps (improvement over baseline)
-% Show three different parameter combinations
+% Show three different parameter combinations based on original figure
 % ΔQ_any = Q_best(γ,β) - Q_baseline(γ=0,β=0)
-% ΔQ_γ = Q_best(γ,β=0) - Q_baseline  
-% ΔQ_β = Q_best(γ,β≠0) - Q_baseline
+% ΔQ_γ = Q_best(γ, β=0) - Q_baseline  
+% ΔQ_β = Q_best(β, γ=0) - Q_baseline
 
 % For each heatmap, find best γ or β and compute improvement
 panel_C_configs = {
-    'any',  'Q_{best}(\\gamma,\\beta) - Q_{baseline}';
-    'gamma', 'Q_{best}(\\gamma,\\beta=0) - Q_{baseline}';
-    'beta',  'Q_{best}(\\gamma,\\beta\\neq0) - Q_{baseline}'
+    'any',   'Q_{best}(\gamma,\beta) - Q_{baseline}';
+    'gamma', 'Q_{best}(\gamma,\beta=0) - Q_{baseline}';
+    'beta',  'Q_{best}(\beta,\gamma=0) - Q_{baseline}'
 };
 
 for col = 1:3
@@ -198,7 +198,7 @@ for col = 1:3
     
     for noise_idx = 1:length(noise_levels)
         for p_idx = 1:length(pattern_counts)
-            % Baseline quality
+            % Baseline quality (γ=0, β=0)
             Q_baseline = mean_results(noise_idx, p_idx, baseline_gamma_idx, baseline_bell_idx);
             
             % Best quality based on configuration
@@ -207,12 +207,11 @@ for col = 1:3
                     % Best over all γ and β
                     Q_best = max(max(mean_results(noise_idx, p_idx, :, :)));
                 case 'gamma'
-                    % Best over γ with β=0
+                    % Best over γ with β=0 fixed
                     Q_best = max(mean_results(noise_idx, p_idx, :, baseline_bell_idx));
                 case 'beta'
-                    % Best over β≠0 with any γ
-                    non_zero_bell = setdiff(1:length(bell_amp_values), baseline_bell_idx);
-                    Q_best = max(max(mean_results(noise_idx, p_idx, :, non_zero_bell)));
+                    % Best over β with γ=0 fixed
+                    Q_best = max(mean_results(noise_idx, p_idx, baseline_gamma_idx, :));
             end
             
             DeltaQ(noise_idx, p_idx) = Q_best - Q_baseline;
